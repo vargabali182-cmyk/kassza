@@ -7,7 +7,8 @@
    ===================================================================== */
 
 const AI_KEY_LS = 'kassza_ai_key';           // kept apart from the data, never exported in backups
-const AI_SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.3.0/+esm';
+// Self-hosted bundle of @anthropic-ai/sdk 1.3.0: no third-party script ever runs next to the user's data.
+const AI_SDK_URL = new URL('js/vendor/anthropic-sdk-1.3.0.mjs', location.href).href;
 const AI_MODEL = 'claude-opus-5-5';
 // USD list prices used only for the on-screen cost estimate
 const AI_PRICE = { inPerM: 4, outPerM: 20, perSearch: 0.01 };
@@ -193,7 +194,8 @@ function offerHtml(o) {
       ${urls.map(u => `<a class="chip" href="${esc(u)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(hostOf(u))}</a>`).join('')}</div></div></li>`;
 }
 /* ---------- claude.ai mode: uses the user's own Claude subscription (Pro/Max), no API key ---------- */
-const CLAUDE_URL_LIMIT = 12000; // claude.ai prefills up to ~14 000 characters from ?q=
+// Privacy: the prompt travels only via the clipboard, never in a URL (URLs end up in browser history and server logs).
+const CLAUDE_NEW_CHAT = 'https://claude.ai/new';
 
 function buildClaudePrompt() {
   return `${AI_TASK}
@@ -213,15 +215,6 @@ async function copyText(text) {
     let ok = false; try { ok = document.execCommand('copy'); } catch {}
     ta.remove(); return ok;
   }
-}
-
-async function openInClaude() {
-  const prompt = buildClaudePrompt();
-  const copied = await copyText(prompt);
-  const url = prompt.length <= CLAUDE_URL_LIMIT ? 'https://claude.ai/new?q=' + encodeURIComponent(prompt) : 'https://claude.ai/new';
-  window.open(url, '_blank', 'noopener');
-  S.settings.lastClaudeReview = today(); save();
-  return copied;
 }
 
 const banksEditorHtml = s => `<div class="field"><span>Bankjaid és csomagjaid (minél pontosabb, annál jobb az ajánlás)</span>
@@ -246,11 +239,11 @@ const cleanBanks = banks => banks.filter(b => b.bank.trim()).map(b => ({ bank: b
 const initialBanks = () => (S.settings.banks && S.settings.banks.length ? clone(S.settings.banks) : [{ bank: '', product: '' }]);
 
 function claudeReviewForm() {
-  const st = { banks: initialBanks(), preview: false, opened: false, copied: false };
+  const st = { banks: initialBanks(), preview: false, copied: null };
   const f = formModal({
     title: 'Átnézetem a Claude-dal', state: st,
     render: s => `
-      <p class="small" style="line-height:1.5;margin-top:0">A Kassza összeállítja a kérdést a költéseid alapján, és megnyitja a <b>Claude</b>-ot (appot vagy claude.ai-t). Ott csak elküldöd – a <b>Pro előfizetésedbe</b> beletartozik, külön nem fizetsz. A Claude a weben megnézi a bankjaid aktuális kedvezményeit és csomagjait, és megmondja, mivel járnál jobban.</p>
+      <p class="small" style="line-height:1.5;margin-top:0">A Kassza összeállítja a kérdést a költéseid alapján. Kimásolod, megnyitod a <b>Claude</b>-ot (appot vagy claude.ai-t), beilleszted és elküldöd – a <b>Pro előfizetésedbe</b> beletartozik, külön nem fizetsz. A Claude a weben megnézi a bankjaid aktuális kedvezményeit és csomagjait, és megmondja, mivel járnál jobban.</p>
       ${banksEditorHtml(s)}
       <div class="card" style="background:var(--surface-2);box-shadow:none">
         <b class="small">🔒 Mit küldök el?</b>
@@ -258,15 +251,18 @@ function claudeReviewForm() {
         <button class="link" data-f="preview">${s.preview ? 'Elrejtés' : 'Mutasd pontosan'}</button>
         ${s.preview ? `<pre class="tiny" style="white-space:pre-wrap;max-height:220px;overflow:auto;background:var(--surface);padding:8px;border-radius:8px">${esc(buildClaudePrompt())}</pre>` : ''}
       </div>
-      ${s.opened ? `<div class="save-box" style="text-align:left"><b>✔ Megnyitottam a Claude-ot.</b><div class="small" style="margin-top:4px">1. Ha a kérdés nincs beírva, illeszd be (${s.copied ? 'már a vágólapon van' : 'másold ki a fenti „Mutasd pontosan” részből'}).<br>2. Kapcsold be a <b>webes keresést</b> a Claude-ban, ha nincs bekapcsolva, és küldd el.<br>3. Ha kész, a válasz végén lévő JSON-t másold ide vissza a „Claude válaszának beillesztése” gombbal – így az ajánlatok itt is megmaradnak.</div></div>` : ''}
-      <div class="btns"><button class="btn" data-f="paste">📋 Claude válaszának beillesztése</button><button class="btn primary" data-f="open">🤖 Megnyitás a Claude-ban</button></div>`,
+      ${s.copied === false ? `<label class="field"><span>Nem sikerült automatikusan másolni – jelöld ki és másold ki innen:</span><textarea class="input tiny" rows="6" readonly onclick="this.select()">${esc(buildClaudePrompt())}</textarea></label>` : ''}
+      ${s.copied ? `<div class="save-box" style="text-align:left"><b>✔ A kérdés a vágólapon van.</b><div class="small" style="margin-top:4px">2. Nyisd meg a Claude-ot, kapcsold be a <b>webes keresést</b>, illeszd be a kérdést és küldd el.<br>3. Ha kész, a válasz végén lévő JSON-t másold ide vissza a „Claude válaszának beillesztése” gombbal.</div></div>` : ''}
+      <div class="btns"><button class="btn" data-f="copy">📋 1. Kérdés másolása</button><a class="btn primary" style="text-align:center;text-decoration:none" href="${CLAUDE_NEW_CHAT}" target="_blank" rel="noopener noreferrer">🤖 2. Claude megnyitása</a></div>
+      <div class="btns"><button class="btn" data-f="paste">📥 3. Claude válaszának beillesztése</button></div>`,
     on: {
       ...bankHandlers,
       preview: (el, s, rr) => { S.settings.banks = cleanBanks(s.banks); s.preview = !s.preview; rr(); },
-      open: async (el, s, rr) => {
+      copy: async (el, s, rr) => {
         S.settings.banks = cleanBanks(s.banks);
         if (!S.settings.banks.length) return toast('Add meg legalább egy bankodat');
-        s.copied = await openInClaude(); s.opened = true; rr();
+        s.copied = await copyText(buildClaudePrompt());
+        S.settings.lastClaudeReview = today(); save(); rr();
       },
       paste: (el, s) => { S.settings.banks = cleanBanks(s.banks); save(); closeModal(); pasteResultForm(); },
     },

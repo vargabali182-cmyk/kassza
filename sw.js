@@ -1,5 +1,5 @@
 // Kassza service worker: network first (always fresh when online), cache fallback (works fully offline).
-const CACHE = 'kassza-v5';
+const CACHE = 'kassza-v6';
 const FILES = ['./', './index.html', './style.css', './js/core.js', './js/charts.js', './js/views.js', './js/forms.js', './js/importers.js', './js/insights.js', './js/advisor.js', './js/app.js',
   './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
