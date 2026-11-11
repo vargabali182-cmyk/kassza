@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kassza – költségkövető</title>
+<meta name="description" content="Ingyenes, offline költségkövető és borítékos költségvetés. Az adataid csak a telefonodon vannak.">
+<meta name="theme-color" content="#0f6b4f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kassza">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- PIN lock screen -->
+  <div id="lock" class="lock hidden">
+    <div class="lock-box">
+      <div class="lock-logo">🔒</div>
+      <div class="lock-title">Add meg a PIN kódot</div>
+      <div class="pin-dots" id="pinDots"></div>
+      <div class="pin-pad" id="pinPad"></div>
+      <div class="lock-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <button class="icon-btn" id="backBtn" aria-label="Vissza" hidden>‹</button>
+    <h1 id="pageTitle">Kassza</h1>
+    <div class="topbar-actions" id="topActions"></div>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <button class="fab" id="fab" aria-label="Új tranzakció">＋</button>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-route="home" class="active"><span>🏠</span>Áttekintés</button>
+    <button data-route="tx"><span>📒</span>Tranzakciók</button>
+    <button data-route="budget"><span>✉️</span>Költségvetés</button>
+    <button data-route="reports"><span>🧠</span>Elemzés</button>
+    <button data-route="more"><span>☰</span>Több</button>
+  </nav>
+
+  <div id="modalRoot"></div>
+  <div id="toast" class="toast"></div>
+  <div id="tooltip" class="chart-tip" role="tooltip"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/views.js"></script>
+  <script src="js/forms.js"></script>
+  <script src="js/importers.js"></script>
+  <script src="js/insights.js"></script>
+  <script src="js/advisor.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
