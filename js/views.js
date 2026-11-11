@@ -462,8 +462,8 @@ function viewData() {
       <div class="btns"><button class="btn primary" data-act="backup">⤓ Mentés letöltése (JSON)</button><button class="btn" data-act="restore">⤒ Visszaállítás fájlból</button></div></div>
     <div class="card"><h2>🟦 Revolut</h2><p class="small muted">Revolut kivonat (CSV) beolvasása egy lépésben: számlák, átváltások, díjak és kategóriák automatikusan. Androidon a Revolut appból közvetlenül megoszthatod a Kasszával.</p>
       <div class="btns"><button class="btn primary" data-act="revolut">🟦 Revolut import</button></div></div>
-    <div class="card"><h2>🏦 Banki kivonat importálása (CSV)</h2><p class="small muted">Töltsd le a bankod netbankjából a tranzakciókat CSV formátumban, és itt beolvashatod. Az oszlopokat te választod ki, a kategóriákat a szabályok és a korábbi tételek alapján automatikusan kitölti.</p>
-      <div class="btns"><button class="btn" data-act="importCsv">⤒ CSV importálása</button></div></div>
+    <div class="card"><h2>🏦 Banki kivonat importálása (CSV vagy Excel)</h2><p class="small muted">Töltsd le a bankod netbankjából a tranzakciókat CSV formátumban, és itt beolvashatod. Az oszlopokat te választod ki, a kategóriákat a szabályok és a korábbi tételek alapján automatikusan kitölti.</p>
+      <div class="btns"><button class="btn" data-act="importCsv">⤒ CSV / Excel importálása</button></div></div>
     <div class="card"><h2>📄 Export táblázatba</h2><p class="small muted">Minden tétel CSV fájlban, Excelben vagy Google Táblázatokban megnyitható.</p>
       <div class="btns"><button class="btn" data-act="exportCsv">⤓ CSV export</button></div></div>
     <div class="card"><h2>🧪 Egyéb</h2><div class="btns"><button class="btn" data-act="startDemo">Demó adatok betöltése</button><button class="btn danger" data-act="wipe">Minden adat törlése</button></div>

@@ -1,5 +1,5 @@
 // Kassza service worker: network first (always fresh when online), cache fallback (works fully offline).
-const CACHE = 'kassza-v6';
+const CACHE = 'kassza-v7';
 const FILES = ['./', './index.html', './style.css', './js/core.js', './js/charts.js', './js/views.js', './js/forms.js', './js/importers.js', './js/insights.js', './js/advisor.js', './js/app.js',
   './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
@@ -22,9 +22,10 @@ self.addEventListener('fetch', e => {
       try {
         const form = await e.request.formData();
         const file = form.get('file');
-        const text = file && typeof file.text === 'function' ? await file.text() : (form.get('text') || '');
+        // keep the raw bytes: the file may be CSV or an Excel (.xlsx) statement
+        const body = file && typeof file.arrayBuffer === 'function' ? await file.arrayBuffer() : new TextEncoder().encode(form.get('text') || '');
         const c = await caches.open('kassza-share');
-        await c.put('shared-file', new Response(text, { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }));
+        await c.put('shared-file', new Response(body, { headers: { 'Content-Type': 'application/octet-stream' } }));
       } catch (err) { /* fall through to the app, which reports the missing file */ }
       return Response.redirect('./index.html?shared=1', 303);
     })());

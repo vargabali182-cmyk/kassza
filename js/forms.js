@@ -506,12 +506,8 @@ function pinForm() {
 
 /* =========================== CSV IMPORT =========================== */
 async function csvImport() {
-  const text = await pickFile('.csv,text/csv,text/plain');
-  if (!text) return;
-  // Revolut statements are recognised automatically and get the one-tap importer
-  const head0 = parseCSV(text.split(/\r?\n/).slice(0, 2).join('\n'))[0] || [];
-  if (detectRevolut(head0)) return importRevolutText(text);
-  csvImportFromText(text);
+  // CSV or Excel; Revolut statements are recognised automatically and get the one-tap importer
+  importStatementFile(await pickFileBuffer());
 }
 function csvImportFromText(text) {
   const rows = parseCSV(text);

@@ -154,16 +154,15 @@ function revolutHelp() {
     <p class="small">A Revolut magánszámlákhoz nincs nyilvános, ingyenes API, ezért a kivonat fájllal megy – 30 másodperc:</p>
     <ol class="small" style="line-height:1.7;padding-left:18px">
       <li>Revolut app → a főoldalon koppints a számládra (pl. HUF) → <b>⋯ / Kivonat (Statement)</b></li>
-      <li>Formátum: <b>Excel / CSV</b>, időszak: pl. az utolsó import óta</li>
+      <li>Formátum: <b>Excel</b> (a PDF nem jó), időszak: pl. az utolsó import óta. Minden pénznemhez (HUF, EUR…) külön kivonat van.</li>
       <li><b>Androidon:</b> a megosztás menüben válaszd a <b>Kassza</b> appot – kész, magától beolvassa.<br>
-          <b>iPhone-on:</b> mentsd a Fájlokba, majd itt nyomd meg a lenti gombot és válaszd ki.</li>
+          <b>iPhone-on:</b> a megosztásnál válaszd a „Mentés a Fájlokba” lehetőséget, majd itt nyomd meg a lenti gombot, és a Fájlokban válaszd ki (Letöltések vagy „Az iPhone-omon”).</li>
     </ol>
     <p class="small muted">Amit már beolvastál, azt nem duplázza. A boltokat (Lidl, Wolt, Netflix…) magától besorolja, és megjegyzi, amit kézzel javítasz.</p>
     <div class="btns"><button class="btn primary" data-c="pick">📄 Revolut fájl kiválasztása</button></div>`)
     .addEventListener('click', async e => {
       if (!e.target.closest('[data-c="pick"]')) return;
-      const text = await pickFile('.csv,text/csv,text/plain,application/vnd.ms-excel');
-      if (text) importRevolutText(text);
+      importStatementFile(await pickFileBuffer());
     });
 }
 
@@ -175,7 +174,105 @@ async function checkSharedFile() {
     const c = await caches.open('kassza-share');
     const res = await c.match('shared-file');
     if (!res) return toast('Nem érkezett fájl');
-    const text = await res.text(); await c.delete('shared-file');
-    importRevolutText(text);
+    const buf = await res.arrayBuffer(); await c.delete('shared-file');
+    await importStatementFile({ name: 'shared', buf });
   } catch (e) { toast('A megosztott fájlt nem sikerült beolvasni'); }
+}
+
+/* =====================================================================
+   File reading: CSV (UTF-8 or Windows-1250) and Excel .xlsx without libraries.
+   Revolut's "Excel" statement is an .xlsx file.
+   ===================================================================== */
+const IMPORT_ACCEPT = '.csv,.xlsx,.txt,text/csv,text/plain,text/comma-separated-values,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/octet-stream';
+
+function pickFileBuffer(accept = IMPORT_ACCEPT) {
+  return new Promise(res => {
+    const i = document.createElement('input'); i.type = 'file'; if (accept) i.accept = accept;
+    i.onchange = async () => { const f = i.files[0]; if (!f) return res(null); res({ name: f.name, buf: await f.arrayBuffer() }); };
+    i.click();
+  });
+}
+function decodeText(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { return new TextDecoder('windows-1250').decode(buf); } // older Hungarian bank exports
+}
+
+/* ---- minimal ZIP reader (central directory + deflate via DecompressionStream) ---- */
+async function unzip(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error('A fájl sérült vagy nem Excel.');
+  const count = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+  const files = {};
+  for (let k = 0; k < count && dv.getUint32(p, true) === 0x02014b50; k++) {
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    files[new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen))] = { method, csize, off };
+    p += 46 + nlen + xlen + clen;
+  }
+  const read = async name => {
+    const f = files[name]; if (!f) return null;
+    const start = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true);
+    const data = u8.subarray(start, start + f.csize);
+    if (f.method === 0) return new TextDecoder().decode(data);
+    if (f.method !== 8 || typeof DecompressionStream === 'undefined') throw new Error('Ez a böngésző nem tudja kicsomagolni az Excel fájlt – frissítsd, vagy válaszd a CSV formátumot.');
+    return new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+  };
+  return { names: Object.keys(files), read };
+}
+const xmlDoc = s => new DOMParser().parseFromString(s, 'application/xml');
+const tags = (el, n) => [...el.getElementsByTagNameNS('*', n)];
+function excelDate(serial) { return new Date(Math.round((serial - 25569) * 864e5)).toISOString().slice(0, 19).replace('T', ' '); }
+
+/** Returns the first worksheet of an .xlsx file as rows of strings. */
+async function xlsxToRows(buf) {
+  const z = await unzip(buf);
+  const strings = [];
+  const sst = await z.read('xl/sharedStrings.xml');
+  if (sst) for (const si of tags(xmlDoc(sst), 'si')) strings.push(tags(si, 't').filter(t => t.parentNode.localName !== 'rPh').map(t => t.textContent).join(''));
+  // which cell styles are dates (so serial numbers become real dates)
+  const dateStyles = new Set();
+  const sty = await z.read('xl/styles.xml');
+  if (sty) {
+    const d = xmlDoc(sty), custom = {};
+    for (const nf of tags(d, 'numFmt')) custom[nf.getAttribute('numFmtId')] = nf.getAttribute('formatCode') || '';
+    const xfs = tags(d, 'cellXfs')[0];
+    if (xfs) tags(xfs, 'xf').forEach((xf, i) => {
+      const id = +xf.getAttribute('numFmtId'), code = (custom[id] || '').replace(/"[^"]*"|\[[^\]]*\]/g, '');
+      if ((id >= 14 && id <= 22) || (id >= 45 && id <= 47) || /y|d|h:mm/i.test(code)) dateStyles.add(i);
+    });
+  }
+  const sheet = z.names.filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort((a, b) => +a.match(/\d+/)[0] - +b.match(/\d+/)[0])[0];
+  if (!sheet) throw new Error('Nem találtam munkalapot az Excel fájlban.');
+  const colIdx = ref => { let n = 0; for (const ch of ref.replace(/\d+/g, '')) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; };
+  const rows = [];
+  for (const r of tags(xmlDoc(await z.read(sheet)), 'row')) {
+    const row = [];
+    for (const c of tags(r, 'c')) {
+      const t = c.getAttribute('t'), s = +(c.getAttribute('s') || 0), v = tags(c, 'v')[0], ref = c.getAttribute('r');
+      let val = '';
+      if (t === 's') val = v ? (strings[+v.textContent] ?? '') : '';
+      else if (t === 'inlineStr') val = tags(c, 't').map(x => x.textContent).join('');
+      else if (v) { val = v.textContent; if ((!t || t === 'n') && dateStyles.has(s) && val !== '' && !isNaN(+val)) val = excelDate(+val); }
+      row[ref ? colIdx(ref) : row.length] = val;
+    }
+    rows.push(Array.from(row, x => x ?? ''));
+  }
+  return rows.filter(r => r.some(x => String(x).trim() !== ''));
+}
+
+/** One entry point for every statement file: sniffs the format, then routes to the Revolut or generic CSV importer. */
+async function importStatementFile(file) {
+  if (!file) return;
+  const u8 = new Uint8Array(file.buf.slice(0, 8));
+  let text;
+  try {
+    if (u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46) return toast('Ez PDF – a Revolutban az „Excel” formátumot válaszd a kivonatnál.');
+    if (u8[0] === 0xD0 && u8[1] === 0xCF) return toast('Ez régi .xls fájl – mentsd el .xlsx vagy CSV formátumban.');
+    if (u8[0] === 0x50 && u8[1] === 0x4B) text = (await xlsxToRows(file.buf)).map(r => r.map(csvEscape).join(';')).join('\n');
+    else text = decodeText(file.buf);
+  } catch (e) { return toast(e && e.message ? e.message : 'Nem sikerült beolvasni a fájlt'); }
+  const head = parseCSV(text.split(/\r?\n/).slice(0, 2).join('\n'))[0] || [];
+  if (detectRevolut(head)) importRevolutText(text); else csvImportFromText(text);
 }

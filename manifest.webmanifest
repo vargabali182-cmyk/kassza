@@ -43,6 +43,8 @@
             "text/comma-separated-values",
             "text/plain",
             "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
             "application/octet-stream"
           ]
         }
